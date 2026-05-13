@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS noise
+Thumbs.db
+
+# Local artifact staging (we never commit the binaries — they're
+# uploaded as Release assets by the workflow)
+/artifacts/
+*.bin
+*.elf
+*.map
+
+# Logs / scratch
+*.log
+/tmp/

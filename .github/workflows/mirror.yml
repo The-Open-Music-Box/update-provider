@@ -1,0 +1,46 @@
+name: Mirror release (placeholder)
+
+# This workflow is intentionally a no-op stub. The actual mirror logic
+# lives upstream in `esp32-firmware/.github/workflows/ota-release.yml`:
+# it builds the firmware, then makes a second `gh release create` call
+# targeting THIS repo with a fine-grained PAT (`contents:write` scope on
+# update-provider only).
+#
+# This file exists so:
+#   1. The repo shows up correctly in the GitHub Actions tab from day 1.
+#   2. A future contributor who lands here looking for the publish
+#      pipeline gets a clear pointer to where it actually runs.
+#   3. If we ever decide to invert the relationship (push from upstream
+#      becomes a repository_dispatch / workflow_call into this repo),
+#      the entry point is already wired.
+#
+# Trigger is `workflow_dispatch` only — no automatic execution today.
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why are you running this manually?'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  noop:
+    name: Document the publish path
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain where the publish actually happens
+        run: |
+          cat <<'EOF'
+          This repo does not publish anything on its own. Releases are
+          pushed in from esp32-firmware/.github/workflows/ota-release.yml.
+
+          If you ran this workflow expecting a build, you want:
+            https://github.com/The-Open-Music-Box/esp32-firmware/actions/workflows/ota-release.yml
+
+          If you want to manually attach assets to a release here, see
+            docs/publishing.md → "Manual publish (escape hatch)"
+          EOF
