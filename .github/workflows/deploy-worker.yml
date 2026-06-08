@@ -18,7 +18,9 @@ permissions:
 jobs:
   deploy:
     name: Deploy Worker
-    runs-on: ubuntu-latest
+    # Runners self-hosted OMB : label de stack obligatoire (pool `node` du
+    # runner-manager). update-provider doit être listé dans runner_pools.node.repos.
+    runs-on: [self-hosted, Linux, ARM64, node]
     timeout-minutes: 15
     defaults:
       run:
