@@ -1,0 +1,41 @@
+name: Deploy firmware-cors Worker
+
+# Déploie le Worker CORS (fw.theopenmusicbox.com) quand son code change sur
+# develop. Prérequis : secrets repo CLOUDFLARE_API_TOKEN (scopé "Edit Cloudflare
+# Workers" sur la zone theopenmusicbox.com) + CLOUDFLARE_ACCOUNT_ID.
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'workers/firmware-cors/**'
+      - '.github/workflows/deploy-worker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: workers/firmware-cors
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/firmware-cors

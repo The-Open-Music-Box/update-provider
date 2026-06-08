@@ -7,8 +7,12 @@ This repo is intentionally a thin artifact mirror. Source code lives in the
 private `esp32-firmware` repo; the **compiled** firmware binaries land here
 so the Flutter / iOS / Android clients can read
 `https://api.github.com/repos/theopenmusicbox/update-provider/releases`
-**anonymously** (no PAT, no auth-provider token, no Cloudflare Worker — just
-an HTTPS GET).
+**anonymously** (no PAT, no auth-provider token — just an HTTPS GET).
+
+> **Note.** The mobile clients above need no Worker. A single Cloudflare
+> Worker (`workers/firmware-cors/`) does exist, but **only** to add CORS
+> headers for the **browser** firmware flasher (web#193) — see
+> "Active services". The artifacts themselves still live in GitHub Releases.
 
 ## What lives here
 
@@ -88,12 +92,23 @@ pushed. The workflow:
 See `esp32-firmware/docs/ota-release-process.md` for the human walkthrough
 and `esp32-firmware/.github/workflows/ota-release.yml` for the source.
 
+## Active services
+
+- **`firmware-cors` Cloudflare Worker** (`workers/firmware-cors/`) — stateless
+  CORS proxy on `https://fw.theopenmusicbox.com/{tag}/{asset}`. It exists
+  solely so the **browser** firmware flasher (web#193, ESP Web Tools) can
+  `fetch()` the release binaries: GitHub Release assets carry no CORS headers,
+  which blocks cross-origin browser downloads. The Worker stores nothing
+  durable (GitHub Releases stay the source of truth); it just adds CORS and an
+  immutable edge cache. See `workers/firmware-cors/README.md`.
+
 ## What this repo does NOT do (yet)
 
-- **No active service.** No Cloudflare Worker, no FastAPI, no scheduled
-  job. Just artifacts attached to releases. If we later need
-  release-history filtering, anti-rollback enforcement, or a custom
-  channel index, the code can land in this same repo without renaming.
+- **No publish-side service.** No FastAPI, no scheduled job, no build step.
+  Releases are still pushed in from `esp32-firmware`; this repo only stores
+  artifacts and re-serves them (releases for clients, `firmware-cors` for the
+  browser). If we later need release-history filtering, anti-rollback
+  enforcement, or a custom channel index, the code can land in this same repo.
 - **No image signing on the publish side.** Manifest carries SHA-256 only.
   ECDSA app-level signing is tracked as Phase 2 in
   `esp32-firmware/docs/ota-signing.md` and would be added at the
@@ -115,6 +130,7 @@ and `esp32-firmware/.github/workflows/ota-release.yml` for the source.
 ## Cross-repo references
 
 - EPIC: [`esp32-firmware#744`](https://github.com/The-Open-Music-Box/esp32-firmware/issues/744)
+- Browser flasher: [`web#193`](https://github.com/The-Open-Music-Box/web/issues/193) (consumes `fw.theopenmusicbox.com`)
 - Tag convention: [`esp32-firmware/docs/ota-release-process.md`](https://github.com/The-Open-Music-Box/esp32-firmware/blob/develop/docs/ota-release-process.md)
 - Signing posture: [`esp32-firmware/docs/ota-signing.md`](https://github.com/The-Open-Music-Box/esp32-firmware/blob/develop/docs/ota-signing.md)
 - Client integration: [`flutter-app/lib/features/firmware_update/data/github_releases_client.dart`](https://github.com/The-Open-Music-Box/flutter-app/blob/develop/lib/features/firmware_update/data/github_releases_client.dart)
