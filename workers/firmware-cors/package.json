@@ -1,0 +1,14 @@
+{
+  "name": "firmware-cors",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker: CORS proxy for update-provider firmware release assets (fw.theopenmusicbox.com)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run --outdir dist"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
