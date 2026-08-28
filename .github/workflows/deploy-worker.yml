@@ -1,8 +1,12 @@
 name: Deploy firmware-cors Worker
 
-# Déploie le Worker CORS (fw.theopenmusicbox.com) quand son code change sur
-# develop. Prérequis : secrets repo CLOUDFLARE_API_TOKEN (scopé "Edit Cloudflare
-# Workers" sur la zone theopenmusicbox.com) + CLOUDFLARE_ACCOUNT_ID.
+# Deploys the CORS Worker behind fw.theopenmusicbox.com whenever its code
+# changes on develop. The Worker is already live: every deploy from here is a
+# re-upload of the same bundle and must not change behaviour (#16).
+#
+# Prerequisites: repo secrets CLOUDFLARE_API_TOKEN (template "Edit Cloudflare
+# Workers", scoped to the account + the theopenmusicbox.com zone) and
+# CLOUDFLARE_ACCOUNT_ID.
 
 on:
   push:
@@ -15,29 +19,68 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy Worker
-    # Runners self-hosted OMB : label de stack obligatoire (pool `node` du
-    # runner-manager). update-provider doit être listé dans runner_pools.node.repos.
-    runs-on: [self-hosted, Linux, ARM64, node]
+    # OMB self-hosted runners: canonical label set [self-hosted, Linux, X64,
+    # <stack>]. The runner-manager matches pool.labels as a SUBSET of these,
+    # and every pool is X64 since the move to tmb-dev-srv (2026-06-08) — an
+    # ARM64 label is unroutable. The `node` pool image ships Node.js 22, so no
+    # setup-node step is needed.
+    runs-on: [self-hosted, Linux, X64, node]
     timeout-minutes: 15
     defaults:
       run:
         working-directory: workers/firmware-cors
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Install dependencies (lockfile)
+        run: npm ci --no-audit --no-fund
 
-      - name: Install dependencies
-        run: npm install
+      - name: Validate config and bundle (dry run)
+        # `wrangler deploy --dry-run` builds the bundle and validates
+        # wrangler.toml without touching Cloudflare. Fails fast on a broken
+        # config before any credential is used.
+        run: npm run check
 
       - name: Deploy
-        uses: cloudflare/wrangler-action@v3
+        # cloudflare/wrangler-action@v4
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: workers/firmware-cors
+          # Same version as package-lock.json: the action reuses the local
+          # install instead of pulling another one, so CI deploys the exact
+          # bundle a manual `npx wrangler deploy` would.
+          wranglerVersion: '4.98.0'
+          command: deploy
+
+      - name: Smoke test the live endpoint
+        # The root route is a static health/info response served by the Worker
+        # itself, so it does not depend on any particular release surviving
+        # retention. A 200 with `access-control-allow-origin: *` proves the
+        # deployed script answers and still adds CORS.
+        run: |
+          for attempt in 1 2 3; do
+            headers=$(curl --silent --show-error --head \
+              --connect-timeout 5 --max-time 15 \
+              https://fw.theopenmusicbox.com/ || true)
+            if printf '%s\n' "$headers" | grep -qi '^HTTP/[0-9.]* 200' \
+               && printf '%s\n' "$headers" | grep -qi '^access-control-allow-origin: \*'; then
+              echo "fw.theopenmusicbox.com answers 200 with CORS (attempt ${attempt})"
+              exit 0
+            fi
+            echo "attempt ${attempt}: unexpected response"
+            printf '%s\n' "$headers"
+            sleep 5
+          done
+          echo "::error::fw.theopenmusicbox.com did not answer 200 + access-control-allow-origin: * after deploy"
+          exit 1

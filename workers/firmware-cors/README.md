@@ -1,86 +1,92 @@
 # firmware-cors Worker
 
-Cloudflare Worker **stateless** qui sert les binaires de firmware publiés en
-GitHub Releases sur ce repo, **en ajoutant les en-têtes CORS**.
+**Stateless** Cloudflare Worker that serves the firmware binaries published as
+GitHub Releases on this repo, **adding CORS headers**.
 
-URL publique : `https://fw.theopenmusicbox.com/{tag}/{asset}`
+Public URL: `https://fw.theopenmusicbox.com/{tag}/{asset}`
 
-## Pourquoi
+## Why
 
-Le flasheur navigateur de la page `/build/flash` du site
+The browser flasher on the site's `/build/flash` page
 ([web#193](https://github.com/The-Open-Music-Box/web/issues/193), ESP Web Tools
-/ Web Serial) télécharge les `.bin` **côté navigateur** via `fetch()`. Or les
-assets de GitHub Releases (`objects.githubusercontent.com`) n'exposent **aucun**
-en-tête `Access-Control-Allow-Origin` : le `fetch()` cross-origin depuis
-`theopenmusicbox.com` échoue.
+/ Web Serial) downloads the `.bin` files **in the browser** via `fetch()`.
+GitHub Release assets (`objects.githubusercontent.com`) expose **no**
+`Access-Control-Allow-Origin` header, so a cross-origin `fetch()` from
+`theopenmusicbox.com` fails.
 
-Ce Worker est le seul correctif nécessaire : l'app Flutter (OTA) et l'ESP32
-(`esp_https_ota`) tirent en HTTP natif, sans contrainte CORS.
+This Worker is the only fix needed: the Flutter app (OTA) and the ESP32
+(`esp_https_ota`) download over plain HTTP with no CORS constraint.
 
-## Ce qu'il fait / ne fait pas
+## What it does / does not do
 
-- **Proxie** `GET /{tag}/{asset}` vers
+- **Proxies** `GET /{tag}/{asset}` to
   `https://github.com/The-Open-Music-Box/update-provider/releases/download/{tag}/{asset}`
-  et renvoie le flux avec `Access-Control-Allow-Origin: *`.
-- **Ne stocke rien de durable** : la source de vérité reste les GitHub
-  Releases. Seul un cache edge Cloudflare (Cache API) est peuplé à la volée —
-  sûr car un tag de release est immuable (`Cache-Control: immutable`).
-- **Allowlist stricte** (pas d'open-proxy) :
-  - tag : `firmware-v*` (regex `firmware-vX.Y.Z[-(alpha|beta|stable).N]`)
-  - asset : `firmware.bin`, `firmware.bin.sha256`, `bootloader.bin`,
+  and returns the stream with `Access-Control-Allow-Origin: *`.
+- **Stores nothing durable**: GitHub Releases stay the source of truth. Only
+  the Cloudflare edge cache (Cache API) is populated on the fly — safe because
+  a release tag is immutable (`Cache-Control: immutable`).
+- **Strict allowlist** (no open proxy):
+  - tag: `firmware-v*` (regex `firmware-vX.Y.Z[-(alpha|beta|stable).N]`)
+  - asset: `firmware.bin`, `firmware.bin.sha256`, `bootloader.bin`,
     `partitions.bin`, `manifest.json`
-- Méthodes : `GET`, `HEAD`, `OPTIONS` (préflight). Tout le reste → 405.
+- Methods: `GET`, `HEAD`, `OPTIONS` (preflight). Anything else → 405.
 
-| Réponse | Sens |
+| Response | Meaning |
 |---|---|
-| `200` + `X-Cache: HIT/MISS` | binaire servi (depuis edge ou GitHub) |
-| `403 forbidden` | tag non conforme ou asset hors allowlist |
-| `404 not_found` | chemin ≠ `/{tag}/{asset}` ou release/asset inexistant |
-| `502 upstream_error` | GitHub a répondu autre chose que 2xx/404 |
+| `200` + `X-Cache: HIT/MISS` | binary served (from the edge or from GitHub) |
+| `403 forbidden` | tag does not match or asset is not allowlisted |
+| `404 not_found` | path is not `/{tag}/{asset}`, or the release/asset does not exist |
+| `502 upstream_error` | GitHub answered something other than 2xx/404 |
 
-## Développement
+## Development
 
 ```bash
-npm install
-npm run check   # wrangler deploy --dry-run (valide la config + le bundle, sans CF)
-npm run dev     # serveur local wrangler
+npm ci
+npm run check   # wrangler deploy --dry-run (validates config + bundle, no Cloudflare call)
+npm run dev     # local wrangler dev server
 ```
 
-## Déploiement
+## Deployment
 
-### Automatique (CI)
+### Automatic (CI)
 
-`.github/workflows/deploy-worker.yml` déploie au push sur `develop` qui touche
-`workers/firmware-cors/**`. Prérequis : secrets repo `CLOUDFLARE_API_TOKEN`
-(scopé **Edit Cloudflare Workers** sur la zone `theopenmusicbox.com`) et
+`.github/workflows/deploy-worker.yml` deploys on every push to `develop` that
+touches `workers/firmware-cors/**`, on the self-hosted `node` runners. It runs
+the dry-run check first, then `wrangler deploy` (pinned to the lockfile's
+wrangler version), then smoke-tests `https://fw.theopenmusicbox.com/` for a
+`200` with `access-control-allow-origin: *`.
+
+Prerequisites: repo secrets `CLOUDFLARE_API_TOKEN` (scoped **Edit Cloudflare
+Workers** on the account + the `theopenmusicbox.com` zone) and
 `CLOUDFLARE_ACCOUNT_ID`.
 
-### Manuel
+### Manual
 
 ```bash
 cd workers/firmware-cors
-npm install
-npx wrangler deploy   # nécessite `wrangler login` ou CLOUDFLARE_API_TOKEN
+npm ci
+npx wrangler deploy   # requires `wrangler login` or CLOUDFLARE_API_TOKEN
 ```
 
-## Prérequis Cloudflare (côté Jonathan)
+## Cloudflare prerequisites (account owner)
 
-- **DNS : rien à faire à la main.** `wrangler.toml` utilise
-  `custom_domain = true` → wrangler crée l'enregistrement DNS `fw` **et** le
-  certificat edge automatiquement au **premier** déploiement.
-- **Premier déploiement** (crée le domaine) : `wrangler login` (OAuth, scopes
-  complets) puis `npx wrangler deploy`.
-- **Déploiements CI suivants** (mise à jour du script seulement) : secrets repo
-  `CLOUDFLARE_API_TOKEN` (template *Edit Cloudflare Workers*, scopé compte +
-  zone `theopenmusicbox.com`) + `CLOUDFLARE_ACCOUNT_ID`.
+- **DNS: nothing to do by hand.** `wrangler.toml` uses `custom_domain = true`,
+  so wrangler creates the `fw` DNS record **and** the edge certificate
+  automatically on the **first** deploy.
+- **First deploy** (creates the custom domain): `wrangler login` (OAuth, full
+  scopes) then `npx wrangler deploy`. Already done — the Worker is live.
+- **Subsequent CI deploys** (script update only): repo secrets
+  `CLOUDFLARE_API_TOKEN` (template *Edit Cloudflare Workers*, scoped to the
+  account + the `theopenmusicbox.com` zone) + `CLOUDFLARE_ACCOUNT_ID`.
 
-## Côté web
+## Web side
 
-Une fois le Worker en ligne, renseigner dans
-[`web` `components/build/FirmwareFlasher.tsx`](https://github.com/The-Open-Music-Box/web) :
+The site's
+[`web` `components/build/FirmwareFlasher.tsx`](https://github.com/The-Open-Music-Box/web)
+points at the Worker:
 
 ```ts
 const FIRMWARE_CORS_BASE = 'https://fw.theopenmusicbox.com'
 ```
 
-Le composant construit alors les URLs d'asset au format `${BASE}/{tag}/{asset}`.
+The component then builds asset URLs as `${BASE}/{tag}/{asset}`.
