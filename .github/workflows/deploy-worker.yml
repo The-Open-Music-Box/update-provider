@@ -27,10 +27,9 @@ jobs:
   deploy:
     name: Deploy Worker
     # OMB self-hosted runners: canonical label set [self-hosted, Linux, X64,
-    # <stack>]. The runner-manager matches pool.labels as a SUBSET of these,
-    # and every pool is X64 since the move to tmb-dev-srv (2026-06-08) — an
-    # ARM64 label is unroutable. The `node` pool image ships Node.js 22, so no
-    # setup-node step is needed.
+    # <stack>]. The runner pools match their labels as a SUBSET of these and
+    # are all X64 — an ARM64 label is unroutable. The `node` pool image ships
+    # Node.js 22, so no setup-node step is needed.
     runs-on: [self-hosted, Linux, X64, node]
     timeout-minutes: 15
     defaults:

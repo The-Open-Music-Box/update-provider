@@ -1,28 +1,28 @@
 /**
  * firmware-cors — Cloudflare Worker (stateless proxy)
  *
- * Sert les binaires de firmware publiés en GitHub Releases sur ce repo
- * (`update-provider`) en y ajoutant les en-têtes CORS, pour que le flasheur
- * navigateur (ESP Web Tools / Web Serial) de la page `/build/flash` du site
- * puisse les `fetch()` côté client.
+ * Serves the firmware binaries published as GitHub Releases on this repo
+ * (`update-provider`) with CORS headers added, so the browser flasher
+ * (ESP Web Tools / Web Serial) on the site's `/build/flash` page can
+ * `fetch()` them client-side.
  *
- * Les assets de release GitHub (`objects.githubusercontent.com`) n'exposent
- * AUCUN en-tête CORS : un `fetch()` cross-origin depuis theopenmusicbox.com
- * échoue donc sans ce proxy. L'app Flutter (OTA) et l'ESP32 (`esp_https_ota`)
- * tirent en HTTP natif et ne sont pas concernés.
+ * GitHub Release assets (`objects.githubusercontent.com`) expose NO CORS
+ * header: a cross-origin `fetch()` from theopenmusicbox.com fails without
+ * this proxy. The Flutter app (OTA) and the ESP32 (`esp_https_ota`) download
+ * over plain HTTP and are not affected.
  *
- * Le Worker ne stocke rien de durable : la source de vérité reste les
- * GitHub Releases. Le seul "stockage" est le cache edge Cloudflare, peuplé
- * à la volée et sûr car un tag de release est immuable.
+ * The Worker stores nothing durable: GitHub Releases stay the source of
+ * truth. The only "storage" is the Cloudflare edge cache, populated on the
+ * fly and safe because a release tag is immutable.
  *
- * URL publique : https://fw.theopenmusicbox.com/{tag}/{asset}
- *   ex. https://fw.theopenmusicbox.com/firmware-v0.5.3-alpha.1/firmware.bin
+ * Public URL: https://fw.theopenmusicbox.com/{tag}/{asset}
+ *   e.g. https://fw.theopenmusicbox.com/firmware-v0.5.3-alpha.1/firmware.bin
  */
 
 const REPO = 'The-Open-Music-Box/update-provider'
 
-// Allowlist stricte : on ne proxie QUE les assets de release attendus,
-// jamais un chemin arbitraire (pas d'open-proxy).
+// Strict allowlist: only the expected release assets are proxied, never an
+// arbitrary path (no open proxy).
 const ALLOWED_ASSETS = new Set([
   'firmware.bin',
   'firmware.bin.sha256',
@@ -31,7 +31,7 @@ const ALLOWED_ASSETS = new Set([
   'manifest.json',
 ])
 
-// Tags de release valides (cf. update-provider/docs/publishing.md).
+// Valid release tags (see update-provider/docs/publishing.md).
 const TAG_RE = /^firmware-v\d+\.\d+\.\d+(?:-(?:alpha|beta|stable)\.\d+)?$/
 
 const CORS_HEADERS = {
@@ -65,7 +65,7 @@ export default {
     const url = new URL(request.url)
     const parts = url.pathname.split('/').filter(Boolean)
 
-    // Racine : petit endpoint d'information / health.
+    // Root: small info / health endpoint.
     if (parts.length === 0) {
       return jsonResponse(200, {
         service: 'firmware-cors',
@@ -87,7 +87,7 @@ export default {
       })
     }
 
-    // Cache edge : clé normalisée en GET (HEAD partage la même entrée).
+    // Edge cache: key normalised to GET (HEAD shares the same entry).
     const cache = caches.default
     const cacheKey = new Request(`${url.origin}/${tag}/${asset}`, { method: 'GET' })
 
@@ -106,8 +106,9 @@ export default {
         headers: { 'User-Agent': 'firmware-cors-worker' },
       })
     } catch (err) {
-      // Erreur réseau vers GitHub : on répond une erreur structurée AVEC CORS
-      // (sans try/catch, le throw donnerait un 500 opaque sans en-tête CORS).
+      // Network error towards GitHub: answer a structured error WITH CORS
+      // (without the try/catch the throw would yield an opaque 500 with no
+      // CORS header).
       console.error(JSON.stringify({ event: 'upstream_unreachable', tag, asset, message: String(err) }))
       return jsonResponse(502, { error: 'upstream_unreachable', tag, asset })
     }
@@ -125,12 +126,12 @@ export default {
     const resp = new Response(originResp.body, originResp)
     for (const [k, v] of Object.entries(CORS_HEADERS)) resp.headers.set(k, v)
     resp.headers.set('Content-Type', contentType(asset))
-    // Un tag de release est immuable -> cache long et agressif.
+    // A release tag is immutable -> long, aggressive cache.
     resp.headers.set('Cache-Control', 'public, max-age=31536000, immutable')
     resp.headers.set('X-Cache', 'MISS')
     resp.headers.delete('Set-Cookie')
 
-    // Peuple le cache edge en tâche de fond (ne bloque pas la réponse).
+    // Populate the edge cache in the background (does not block the response).
     ctx.waitUntil(
       cache
         .put(cacheKey, resp.clone())

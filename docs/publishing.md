@@ -22,29 +22,21 @@ A release is considered well-formed when it carries **all** of:
 
 ## Tag convention
 
-Tags are duplicated verbatim from `esp32-firmware`:
+Tags are duplicated verbatim from `esp32-firmware`. The nomenclature is
+symmetric across the three channels: the channel suffix is **always**
+present, a bare `firmware-vX.Y.Z` is rejected (see
+[`release-process.md`](release-process.md) for triggers, retention and the
+tag-vs-version rule):
 
-| Pattern | Channel | Example |
-|---|---|---|
-| `firmware-vX.Y.Z` | `stable` | `firmware-v0.5.0` |
-| `firmware-vX.Y.Z-beta.N` | `beta` | `firmware-v0.6.0-beta.1` |
-| `firmware-vX.Y.Z-alpha.N` | `alpha` | `firmware-v0.6.0-alpha.3` |
+| Pattern | Channel | Published version | Example |
+|---|---|---|---|
+| `firmware-vX.Y.Z-alpha.N` | `alpha` | `X.Y.Z-alpha.N` | `firmware-v0.6.0-alpha.3` |
+| `firmware-vX.Y.Z-beta.N` | `beta` | `X.Y.Z-beta.N` | `firmware-v0.6.0-beta.1` |
+| `firmware-vX.Y.Z-stable.N` | `stable` | `X.Y.Z` | `firmware-v0.6.0-stable.1` |
 
 The GitHub Release **must** carry the `prerelease=true` flag for any
 non-stable tag so anonymous clients can filter on it without parsing the
 suffix themselves.
-
-## Push wiring (planned)
-
-`esp32-firmware/.github/workflows/ota-release.yml` will gain a second
-`gh release create` call targeting this repo (`GH_REPO=
-The-Open-Music-Box/update-provider`). The push uses a fine-grained PAT
-with `contents:write` scope on `update-provider` only — never the
-`GITHUB_TOKEN` of the upstream repo (cross-repo workflows can't auth that
-way).
-
-That PR will land as a follow-up issue on this repo; this scaffolding
-just makes sure the target exists and is conventional.
 
 ## Anti-rollback / signing
 
