@@ -15,6 +15,11 @@ attached to GitHub Releases verbatim.
 - Repo scaffolding: `README.md`, `LICENSE`, `.gitignore`, `docs/publishing.md`.
 - Placeholder GitHub Actions workflow under `.github/workflows/` for the
   future mirror push pipeline.
+- `workers/firmware-cors/`: stateless Cloudflare Worker adding CORS headers
+  to release assets on `fw.theopenmusicbox.com` for the browser flasher
+  (web#193), plus `.github/workflows/deploy-worker.yml` deploying it from
+  `develop` on the self-hosted `node` runners ([#11](https://github.com/The-Open-Music-Box/update-provider/issues/11),
+  [#16](https://github.com/The-Open-Music-Box/update-provider/issues/16)).
 
 ## [0.0.0] — Bootstrap
 

@@ -1,0 +1,18 @@
+name = "firmware-cors"
+main = "src/index.js"
+compatibility_date = "2026-06-07"
+
+# No *.workers.dev exposure: the Worker is only reachable through the custom
+# route below.
+workers_dev = false
+
+# Serves the firmware binaries with CORS on the dedicated subdomain.
+# `custom_domain = true`: wrangler creates the `fw` DNS record AND the edge
+# certificate automatically on deploy — no DNS to create by hand.
+routes = [
+  { pattern = "fw.theopenmusicbox.com", custom_domain = true }
+]
+
+[observability]
+enabled = true
+head_sampling_rate = 1

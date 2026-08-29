@@ -20,3 +20,8 @@ Thumbs.db
 # Logs / scratch
 *.log
 /tmp/
+
+# Cloudflare Worker (workers/firmware-cors)
+node_modules/
+dist/
+.wrangler/
