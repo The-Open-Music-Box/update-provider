@@ -14,7 +14,7 @@ name: Mirror release (placeholder)
 #      becomes a repository_dispatch / workflow_call into this repo),
 #      the entry point is already wired.
 #
-# Trigger is `workflow_dispatch` only — no automatic execution today.
+# Trigger is `workflow_dispatch` only: no automatic execution today.
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ permissions:
 jobs:
   noop:
     name: Document the publish path
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, node]
     steps:
       - name: Explain where the publish actually happens
         run: |
